@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Monstera TNR Lenggong</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; background: #f5f5f5; }
+    header { background: #2d5a27; color: white; padding: 15px; text-align: center; position: relative; }
+    h1 { font-size: 1.5em; }
+    .settings-btn { position: absolute; right: 15px; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.2); border: none; color: white; padding: 8px 12px; border-radius: 5px; cursor: pointer; font-size: 1.2em; }
+    nav { display: flex; background: white; border-bottom: 1px solid #ddd; }
+    nav button { flex: 1; padding: 15px; border: none; background: white; cursor: pointer; font-size: 1em; }
+    nav button.active { background: #2d5a27; color: white; }
+    .container { padding: 15px; max-width: 600px; margin: 0 auto; }
+    .card { background: white; padding: 15px; margin-bottom: 10px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); cursor: pointer; }
+    .card:hover { background: #f9f9f9; }
+    .card h3 { margin-bottom: 5px; color: #2d5a27; }
+    .card p { color: #666; font-size: 0.9em; }
+    .status { display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 0.8em; font-weight: bold; }
+    .status.neutered { background: #d4edda; color: #155724; }
+    .status.pending { background: #fff3cd; color: #856404; }
+    .status.intact { background: #f8d7da; color: #721c24; }
+    input, select, textarea { width: 100%; padding: 12px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 1em; }
+    button.submit { width: 100%; padding: 15px; background: #2d5a27; color: white; border: none; border-radius: 5px; font-size: 1.1em; cursor: pointer; }
+    button.submit:hover { background: #1e3d1a; }
+    .stats { display: flex; gap: 10px; margin-bottom: 15px; }
+    .stat { flex: 1; background: white; padding: 10px; border-radius: 8px; text-align: center; }
+    .stat .num { font-size: 1.5em; font-weight: bold; color: #2d5a27; }
+    .stat .label { font-size: 0.8em; color: #666; }
+    .hidden { display: none; }
+    .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #2d5a27; color: white; padding: 12px 24px; border-radius: 5px; display: none; z-index: 1000; }
+    .toast.show { display: block; }
+    .cloud-indicator { display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 0.75em; margin-left: 10px; }
+    .cloud-indicator.connected { background: #d4edda; color: #155724; }
+    .cloud-indicator.offline { background: #f8d7da; color: #721c24; }
+    .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: none; z-index: 2000; }
+    .modal.show { display: flex; align-items: center; justify-content: center; }
+    .modal-content { background: white; padding: 20px; border-radius: 10px; max-width: 400px; width: 90%; }
+    .modal-content h3 { margin-bottom: 15px; color: #2d5a27; }
+    .modal-content label { font-weight: bold; display: block; margin-bottom: 5px; }
+    .modal-content input { margin-bottom: 15px; }
+    .modal-buttons { display: flex; gap: 10px; }
+    .modal-buttons button { flex: 1; padding: 10px; border: none; border-radius: 5px; cursor: pointer; }
+    .btn-save { background: #2d5a27; color: white; }
+    .btn-cancel { background: #ddd; color: #333; }
+    .hint { font-size: 0.8em; color: #999; margin-top: 5px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🐱 Monstera TNR Lenggong</h1>
+    <button class="settings-btn" onclick="openSettings()">⚙️</button>
+  </header>
+  
+  <nav>
+    <button id="btn-colony" class="active" onclick="showSection('colony')">Colonies</button>
+    <button id="btn-report" onclick="showSection('report')">Report</button>
+    <button id="btn-sync" onclick="syncData()" style="background:#f0f0f0;">🔄 Sync</button>
+    <button onclick="resetData()" style="background:#ff6b6b; color:white;">🗑️ Reset</button>
+  </nav>
+  
+  <div class="container">
+    <!-- COLONY SECTION -->
+    <div id="colony-section">
+      <div class="stats">
+        <div class="stat">
+          <div class="num" id="stat-total">0</div>
+          <div class="label">Total</div>
+        </div>
+        <div class="stat">
+          <div class="num" id="stat-neutered">0</div>
+          <div class="label">Neutered</div>
+        </div>
+        <div class="stat">
+          <div class="num" id="stat-pending">0</div>
+          <div class="label">Pending</div>
+        </div>
+      </div>
+      <div id="cloud-status" style="text-align:center; margin-bottom:10px;"></div>
+      <input type="text" id="search" placeholder="Search..." onkeyup="filterColonies()">
+      <p class="hint" style="text-align:center; margin-bottom:10px;">Tap any entry to update its status</p>
+      <div id="colony-list"></div>
+    </div>
+    
+    <!-- REPORT SECTION -->
+    <div id="report-section" class="hidden">
+      <h2 style="margin-bottom: 15px;">Report Cat or Colony</h2>
+      <p style="color: #666; margin-bottom: 15px;">Add a new report for an individual cat or a group</p>
+      <form id="report-form">
+        <input type="text" id="r-name" placeholder="Name *" required>
+        <input type="text" id="r-location" placeholder="Location *" required>
+        <select id="r-type">
+          <option value="cat">🐱 Individual Cat</option>
+          <option value="colony">🏘️ Colony (Group)</option>
+        </select>
+        <select id="r-status">
+          <option value="">Select Status</option>
+          <option value="intact">Intact (Unneutered)</option>
+          <option value="pending">Pending (Scheduled)</option>
+          <option value="neutered">Neutered (Completed)</option>
+        </select>
+        <textarea id="r-notes" placeholder="Additional notes (optional)" rows="3"></textarea>
+        <button type="submit" class="submit">Submit Report</button>
+      </form>
+    </div>
+  </div>
+  
+  <div id="toast" class="toast">Report submitted successfully!</div>
+  
+  <!-- Edit Modal -->
+  <div id="edit-modal" class="modal">
+    <div class="modal-content">
+      <h3>✏️ Update Cat Status</h3>
+      <input type="hidden" id="edit-id">
+      <label>Name:</label>
+      <input type="text" id="edit-name" readonly style="background:#f5f5f5;">
+      <label>New Status:</label>
+      <select id="edit-status">
+        <option value="intact">Intact (Unneutered)</option>
+        <option value="pending">Pending (Scheduled)</option>
+        <option value="neutered">Neutered (Completed)</option>
+      </select>
+      <label>Notes (optional):</label>
+      <textarea id="edit-notes" rows="2"></textarea>
+      <div class="modal-buttons">
+        <button class="btn-cancel" onclick="closeEditModal()">Cancel</button>
+        <button class="btn-save" onclick="saveEdit()">Save Changes</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Settings Modal -->
+  <div id="settings-modal" class="modal">
+    <div class="modal-content">
+      <h3>⚙️ Cloud Settings</h3>
+      <label for="api-url">Google Apps Script URL:</label>
+      <input type="text" id="api-url" placeholder="https://script.google.com/macros/s/.../exec">
+      <p style="font-size:0.8em; color:#666; margin-bottom:15px;">Deploy your Apps Script first, then paste the URL here.</p>
+      <div class="modal-buttons">
+        <button class="btn-cancel" onclick="closeSettings()">Cancel</button>
+        <button class="btn-save" onclick="saveSettings()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Cloud sync configuration
+    var CLOUD_STORAGE_KEY = 'tnr_cloud_url';
+    var LOCAL_STORAGE_KEY = 'tnr_data_v2';
+    var colonies = [];
+    var isCloudConnected = false;
+    
+    // Initialize
+    function init() {
+      updateCloudStatus(false);
+      loadLocalData();
+    }
+    
+    // Load local data
+    function loadLocalData() {
+      localStorage.removeItem(LOCAL_STORAGE_KEY);
+      
+      colonies = [
+        { id: 1, name: 'Kampung Cluster', location: 'Near old temple', type: 'colony', status: 'pending', notes: 'Main colony near village', date: '2026-09-20' },
+        { id: 2, name: 'Si Hitam', location: 'Monstera 90A garden', type: 'cat', status: 'neutered', notes: 'Black cat, very friendly', date: '2026-09-18' },
+        { id: 3, name: 'Oren Group', location: 'Monstera 90B parking area', type: 'colony', status: 'intact', notes: 'Orange tabby group', date: '2026-09-15' },
+        { id: 4, name: 'Kitten Family', location: 'Behind kitchen', type: 'colony', status: 'pending', notes: 'Mother with 3 kittens', date: '2026-09-22' }
+      ];
+      saveLocalData();
+      
+      renderColonies();
+      updateStats();
+    }
+    
+    // Save local data
+    function saveLocalData() {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(colonies));
+    }
+    
+    // Fetch from cloud
+    function fetchFromCloud() {
+      var cloudUrl = localStorage.getItem(CLOUD_STORAGE_KEY);
+      if (!cloudUrl) return;
+      
+      var url = cloudUrl + '?_cmd=getAllColonies';
+      
+      fetch(url)
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+          if (data.success && data.result) {
+            colonies = data.result.map(function(c) {
+              return {
+                id: c.id,
+                name: c.name,
+                location: c.location,
+                type: c.type || 'colony',
+                status: c.status || 'pending',
+                notes: c.notes || '',
+                date: c.dateSeen || c.createdAt || new Date().toISOString().split('T')[0]
+              };
+            });
+            saveLocalData();
+            renderColonies();
+            updateStats();
+            updateCloudStatus(true);
+            showToast('Synced from cloud!');
+          }
+        })
+        .catch(function(err) {
+          console.error('Sync error:', err);
+          updateCloudStatus(false);
+        });
+    }
+    
+    // Send to cloud
+    function sendToCloud(entry) {
+      var cloudUrl = localStorage.getItem(CLOUD_STORAGE_KEY);
+      if (!cloudUrl) return false;
+      
+      var data = {
+        _cmd: 'create',
+        _data: JSON.stringify({
+          type: entry.type || 'colony',
+          name: entry.name,
+          location: entry.location,
+          status: entry.status,
+          notes: entry.notes,
+          reporter: 'App User'
+        })
+      };
+      
+      return fetch(cloudUrl, {
+        method: 'POST',
+        body: new URLSearchParams(data)
+      })
+      .then(function(response) { return response.json(); })
+      .then(function(result) {
+        return result.success;
+      })
+      .catch(function(err) {
+        console.error('Upload error:', err);
+        return false;
+      });
+    }
+    
+    // Sync button
+    function syncData() {
+      showToast('Syncing...');
+      fetchFromCloud();
+    }
+    
+    // Update cloud status display
+    function updateCloudStatus(connected) {
+      isCloudConnected = connected;
+      var el = document.getElementById('cloud-status');
+      if (connected) {
+        el.innerHTML = '<span class="cloud-indicator connected">☁️ Connected to Cloud</span>';
+      } else {
+        el.innerHTML = '<span class="cloud-indicator offline">💾 Local Only</span>';
+      }
+    }
+    
+    // Show section
+    function showSection(section) {
+      document.getElementById('colony-section').classList.add('hidden');
+      document.getElementById('report-section').classList.add('hidden');
+      document.getElementById('btn-colony').classList.remove('active');
+      document.getElementById('btn-report').classList.remove('active');
+      document.getElementById('btn-sync').classList.remove('active');
+      
+      document.getElementById(section + '-section').classList.remove('hidden');
+      document.getElementById('btn-' + section).classList.add('active');
+      
+      if (section === 'colony') {
+        renderColonies();
+        updateStats();
+      }
+    }
+    
+    // Render colonies list
+    function renderColonies(filter) {
+      var list = document.getElementById('colony-list');
+      var search = filter || document.getElementById('search').value.toLowerCase();
+      var html = '';
+      
+      for (var i = 0; i < colonies.length; i++) {
+        var c = colonies[i];
+        if (search && c.name.toLowerCase().indexOf(search) === -1 && 
+            c.location.toLowerCase().indexOf(search) === -1 &&
+            (c.notes || '').toLowerCase().indexOf(search) === -1) {
+          continue;
+        }
+        
+        var statusClass = c.status || 'pending';
+        var statusText = c.status === 'neutered' ? 'Neutered' : c.status === 'pending' ? 'Pending' : 'Intact';
+        var typeIcon = c.type === 'cat' ? '🐱' : '🏘️';
+        var typeText = c.type === 'cat' ? 'Individual' : 'Colony';
+        
+        html += '<div class="card" onclick="editEntry(' + i + ')" style="cursor:pointer;">';
+        html += '<h3>' + typeIcon + ' ' + c.name + '</h3>';
+        html += '<p>📍 ' + c.location + '</p>';
+        html += '<p><span class="status ' + statusClass + '">' + statusText + '</span> <span style="font-size:0.75em; color:#999;">[' + typeText + ']</span></p>';
+        if (c.notes) {
+          html += '<p style="margin-top: 8px; font-style: italic;">' + c.notes + '</p>';
+        }
+        html += '<p style="font-size: 0.75em; color: #999; margin-top: 8px;">' + c.date + ' | Tap to update</p>';
+        html += '</div>';
+      }
+      
+      if (!html) {
+        html = '<p style="text-align: center; color: #999;">No entries found.</p>';
+      }
+      
+      list.innerHTML = html;
+    }
+    
+    // Filter colonies
+    function filterColonies() {
+      renderColonies();
+    }
+    
+    // Update stats
+    function updateStats() {
+      document.getElementById('stat-total').textContent = colonies.length;
+      document.getElementById('stat-neutered').textContent = colonies.filter(function(c) { return c.status === 'neutered'; }).length;
+      document.getElementById('stat-pending').textContent = colonies.filter(function(c) { return c.status === 'pending'; }).length;
+    }
+    
+    // Edit entry
+    function editEntry(index) {
+      var entry = colonies[index];
+      if (!entry) return;
+      
+      document.getElementById('edit-id').value = index;
+      document.getElementById('edit-name').value = entry.name;
+      document.getElementById('edit-status').value = entry.status || 'pending';
+      document.getElementById('edit-notes').value = entry.notes || '';
+      document.getElementById('edit-modal').classList.add('show');
+    }
+    
+    // Close edit modal
+    function closeEditModal() {
+      document.getElementById('edit-modal').classList.remove('show');
+    }
+    
+    // Save edited entry
+    function saveEdit() {
+      var index = document.getElementById('edit-id').value;
+      var newStatus = document.getElementById('edit-status').value;
+      var newNotes = document.getElementById('edit-notes').value.trim();
+      
+      if (index !== '' && colonies[index]) {
+        colonies[index].status = newStatus;
+        colonies[index].notes = newNotes;
+        colonies[index].date = new Date().toISOString().split('T')[0];
+        
+        saveLocalData();
+        
+        if (isCloudConnected) {
+          sendToCloud(colonies[index]);
+        }
+        
+        closeEditModal();
+        renderColonies();
+        updateStats();
+        showToast('Status updated!');
+      }
+    }
+    
+    // Handle form submission
+    document.getElementById('report-form').addEventListener('submit', function(e) {
+      e.preventDefault();
+      
+      var name = document.getElementById('r-name').value.trim();
+      var location = document.getElementById('r-location').value.trim();
+      var type = document.getElementById('r-type').value;
+      var status = document.getElementById('r-status').value;
+      var notes = document.getElementById('r-notes').value.trim();
+      
+      if (!name || !location) {
+        alert('Please fill in Name and Location fields.');
+        return;
+      }
+      
+      if (!status) {
+        alert('Please select a Status.');
+        return;
+      }
+      
+      var newEntry = {
+        id: Date.now(),
+        name: name,
+        location: location,
+        type: type,
+        status: status,
+        notes: notes,
+        date: new Date().toISOString().split('T')[0]
+      };
+      
+      colonies.push(newEntry);
+      saveLocalData();
+      
+      if (isCloudConnected) {
+        sendToCloud(newEntry).then(function(success) {
+          if (success) {
+            showToast('Submitted to cloud!');
+          } else {
+            showToast('Saved locally (cloud sync failed)');
+          }
+        });
+      } else {
+        showToast('Report saved locally!');
+      }
+      
+      document.getElementById('r-name').value = '';
+      document.getElementById('r-location').value = '';
+      document.getElementById('r-type').value = 'cat';
+      document.getElementById('r-status').value = '';
+      document.getElementById('r-notes').value = '';
+      
+      showSection('colony');
+    });
+    
+    // Settings modal functions
+    function openSettings() {
+      document.getElementById('settings-modal').classList.add('show');
+    }
+    
+    function closeSettings() {
+      document.getElementById('settings-modal').classList.remove('show');
+    }
+    
+    function saveSettings() {
+      var url = document.getElementById('api-url').value.trim();
+      if (url) {
+        localStorage.setItem(CLOUD_STORAGE_KEY, url);
+        updateCloudStatus(true);
+        fetchFromCloud();
+        showToast('Cloud settings saved!');
+      }
+      closeSettings();
+    }
+    
+    // Toast notification
+    function showToast(msg) {
+      var toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.classList.add('show');
+      setTimeout(function() { toast.classList.remove('show'); }, 2000);
+    }
+    
+    // Reset all data
+    function resetData() {
+      if (confirm('Reset all data to demo? This will clear your reports.')) {
+        localStorage.removeItem(LOCAL_STORAGE_KEY);
+        localStorage.removeItem(CLOUD_STORAGE_KEY);
+        loadLocalData();
+        updateCloudStatus(false);
+        showToast('Data reset!');
+      }
+    }
+    
+    // Initialize on page load
+    init();
+  </script>
+</body>
+</html>
