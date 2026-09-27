@@ -208,14 +208,18 @@
     // Fetch from cloud
     function fetchFromCloud() {
       var cloudUrl = localStorage.getItem(CLOUD_STORAGE_KEY);
-      if (!cloudUrl) return;
+      if (!cloudUrl) {
+        console.log('No cloud URL found in localStorage');
+        return;
+      }
       
       console.log('Fetching from cloud:', cloudUrl);
       var url = cloudUrl + '?cmd=getAllColonies';
       
-      fetch(url)
+      fetch(url, {mode: 'cors'})
         .then(function(response) { 
           console.log('Response status:', response.status);
+          console.log('Response headers:', response.headers.get('content-type'));
           return response.json(); 
         })
         .then(function(data) {
@@ -236,21 +240,26 @@
             renderColonies();
             updateStats();
             updateCloudStatus(true);
-            showToast('Synced from cloud!');
+            showToast('Synced from cloud! (' + colonies.length + ' entries)');
           } else {
             showToast('Cloud returned error: ' + (data.error || 'Unknown'));
           }
         })
         .catch(function(err) {
           console.error('Sync error:', err);
-          showToast('Sync failed - check URL is correct');
+          showToast('Sync failed: ' + err.message);
         });
     }
     
     // Send to cloud
     function sendToCloud(entry) {
       var cloudUrl = localStorage.getItem(CLOUD_STORAGE_KEY);
-      if (!cloudUrl) return false;
+      if (!cloudUrl) {
+        console.log('No cloud URL for upload');
+        return false;
+      }
+      
+      console.log('Sending to cloud:', cloudUrl);
       
       var data = {
         cmd: 'create',
@@ -264,12 +273,19 @@
         })
       };
       
+      console.log('POST data:', data);
+      
       return fetch(cloudUrl, {
         method: 'POST',
+        mode: 'cors',
         body: new URLSearchParams(data)
       })
-      .then(function(response) { return response.json(); })
+      .then(function(response) { 
+        console.log('POST status:', response.status);
+        return response.json(); 
+      })
       .then(function(result) {
+        console.log('POST result:', result);
         return result.success;
       })
       .catch(function(err) {
@@ -280,7 +296,14 @@
     
     // Sync button
     function syncData() {
-      showToast('Syncing...');
+      var cloudUrl = localStorage.getItem(CLOUD_STORAGE_KEY);
+      if (!cloudUrl) {
+        showToast('⚠️ No cloud URL saved. Please connect in Settings first!');
+        openSettings();
+        return;
+      }
+      
+      showToast('🔄 Syncing from cloud...');
       fetchFromCloud();
     }
     
@@ -469,9 +492,10 @@
       var url = document.getElementById('api-url').value.trim();
       if (url) {
         localStorage.setItem(CLOUD_STORAGE_KEY, url);
+        console.log('Cloud URL saved:', url);
         updateCloudStatus(true);
         fetchFromCloud();
-        showToast('Cloud connected!');
+        showToast('✅ Cloud connected!');
       } else {
         localStorage.removeItem(CLOUD_STORAGE_KEY);
         updateCloudStatus(false);
@@ -484,6 +508,8 @@
       var appUrl = window.location.href.split('?')[0];
       var cloudUrl = localStorage.getItem(CLOUD_STORAGE_KEY);
       var shareInput = document.getElementById('share-link');
+      
+      console.log('Generating share link. Cloud URL exists:', !!cloudUrl);
       
       if (cloudUrl) {
         shareInput.value = appUrl + '?cloud=' + encodeURIComponent(cloudUrl);
