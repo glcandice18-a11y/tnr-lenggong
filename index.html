@@ -137,10 +137,13 @@
       <h3>⚙️ Cloud Settings</h3>
       <label for="api-url">Google Apps Script URL:</label>
       <input type="text" id="api-url" placeholder="https://script.google.com/macros/s/.../exec">
-      <p style="font-size:0.8em; color:#666; margin-bottom:15px;">Deploy your Apps Script first, then paste the URL here.</p>
-      <div class="modal-buttons">
+      <p style="font-size:0.8em; color:#666; margin-bottom:10px;">Deploy your Apps Script first, then paste the URL here.</p>
+      <button id="copy-url-btn" style="width:100%; padding:10px; margin:10px 0; background:#e74c3c; color:white; border:none; border-radius:5px; cursor:pointer;">📋 Copy URL to Share</button>
+      <p style="font-size:0.75em; color:#888; margin-top:10px;">Share this link with others so they can connect automatically:</p>
+      <input type="text" id="share-link" readonly style="width:100%; font-size:0.75em; padding:8px; margin-top:5px; background:#f0f0f0;">
+      <div class="modal-buttons" style="margin-top:15px;">
         <button class="btn-cancel" onclick="closeSettings()">Cancel</button>
-        <button class="btn-save" onclick="saveSettings()">Save</button>
+        <button class="btn-save" onclick="saveSettings()">Save & Connect</button>
       </div>
     </div>
   </div>
@@ -154,8 +157,29 @@
     
     // Initialize
     function init() {
-      updateCloudStatus(false);
-      loadLocalData();
+      // Check for cloud URL in URL parameters (for sharing)
+      var urlParams = new URLSearchParams(window.location.search);
+      var cloudFromUrl = urlParams.get('cloud');
+      
+      if (cloudFromUrl) {
+        localStorage.setItem(CLOUD_STORAGE_KEY, cloudFromUrl);
+        updateCloudStatus(true);
+        fetchFromCloud();
+      } else {
+        // Check saved cloud URL
+        var cloudUrl = localStorage.getItem(CLOUD_STORAGE_KEY);
+        if (cloudUrl) {
+          document.getElementById('api-url').value = cloudUrl;
+          updateCloudStatus(true);
+          fetchFromCloud();
+        } else {
+          updateCloudStatus(false);
+          loadLocalData();
+        }
+      }
+      
+      // Generate shareable link
+      generateShareLink();
     }
     
     // Load local data
@@ -184,11 +208,16 @@
       var cloudUrl = localStorage.getItem(CLOUD_STORAGE_KEY);
       if (!cloudUrl) return;
       
-      var url = cloudUrl + '?_cmd=getAllColonies';
+      console.log('Fetching from cloud:', cloudUrl);
+      var url = cloudUrl + '?cmd=getAllColonies';
       
       fetch(url)
-        .then(function(response) { return response.json(); })
+        .then(function(response) { 
+          console.log('Response status:', response.status);
+          return response.json(); 
+        })
         .then(function(data) {
+          console.log('Cloud response:', data);
           if (data.success && data.result) {
             colonies = data.result.map(function(c) {
               return {
@@ -206,11 +235,13 @@
             updateStats();
             updateCloudStatus(true);
             showToast('Synced from cloud!');
+          } else {
+            showToast('Cloud returned error: ' + (data.error || 'Unknown'));
           }
         })
         .catch(function(err) {
           console.error('Sync error:', err);
-          updateCloudStatus(false);
+          showToast('Sync failed - check URL is correct');
         });
     }
     
@@ -220,8 +251,8 @@
       if (!cloudUrl) return false;
       
       var data = {
-        _cmd: 'create',
-        _data: JSON.stringify({
+        cmd: 'create',
+        data: JSON.stringify({
           type: entry.type || 'colony',
           name: entry.name,
           location: entry.location,
@@ -438,10 +469,38 @@
         localStorage.setItem(CLOUD_STORAGE_KEY, url);
         updateCloudStatus(true);
         fetchFromCloud();
-        showToast('Cloud settings saved!');
+        showToast('Cloud connected!');
+      } else {
+        localStorage.removeItem(CLOUD_STORAGE_KEY);
+        updateCloudStatus(false);
       }
+      generateShareLink();
       closeSettings();
     }
+    
+    function generateShareLink() {
+      var appUrl = window.location.href.split('?')[0];
+      var cloudUrl = localStorage.getItem(CLOUD_STORAGE_KEY);
+      var shareInput = document.getElementById('share-link');
+      
+      if (cloudUrl) {
+        shareInput.value = appUrl + '?cloud=' + encodeURIComponent(cloudUrl);
+      } else {
+        shareInput.value = 'Connect to cloud first, then share this link';
+      }
+    }
+    
+    document.addEventListener('DOMContentLoaded', function() {
+      var copyBtn = document.getElementById('copy-url-btn');
+      if (copyBtn) {
+        copyBtn.addEventListener('click', function() {
+          var shareInput = document.getElementById('share-link');
+          shareInput.select();
+          document.execCommand('copy');
+          showToast('Link copied! Share it with others.');
+        });
+      }
+    });
     
     // Toast notification
     function showToast(msg) {
