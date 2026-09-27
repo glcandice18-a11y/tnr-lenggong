@@ -58,7 +58,7 @@
     <button id="btn-colony" class="active" onclick="showSection('colony')">Colonies</button>
     <button id="btn-report" onclick="showSection('report')">Report</button>
     <button id="btn-sync" onclick="syncData()" style="background:#f0f0f0;">🔄 Sync</button>
-    <button onclick="resetData()" style="background:#ff6b6b; color:white;">🗑️ Reset</button>
+    <!-- Reset button hidden - only accessible via Settings -->
   </nav>
   
   <div class="container">
@@ -145,6 +145,8 @@
         <button class="btn-cancel" onclick="closeSettings()">Cancel</button>
         <button class="btn-save" onclick="saveSettings()">Save & Connect</button>
       </div>
+      <hr style="margin: 20px 0; border: none; border-top: 1px solid #ddd;">
+      <p style="font-size: 0.75em; color: #999; text-align: center;">Admin: Type "admin" in search box and press Enter</p>
     </div>
   </div>
 
@@ -510,15 +512,21 @@
       setTimeout(function() { toast.classList.remove('show'); }, 2000);
     }
     
-    // Reset all data
+    // Reset all data (admin only - accessible via Settings)
     function resetData() {
       if (confirm('Reset all data to demo? This will clear your reports.')) {
         localStorage.removeItem(LOCAL_STORAGE_KEY);
-        localStorage.removeItem(CLOUD_STORAGE_KEY);
         loadLocalData();
-        updateCloudStatus(false);
-        showToast('Data reset!');
+        showToast('Data reset to demo!');
       }
+    }
+    
+    // Admin access: Type "admin" in search box to reveal reset option
+    document.getElementById('search').addEventListener('keypress', function(e) {
+      if (e.key === 'Enter' && this.value === 'admin') {
+        alert('Admin mode activated!\n\nTo reset data, go to Settings → Scroll down → Click "Reset All Data"');
+      }
+    });
     }
     
     // Initialize on page load
