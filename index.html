@@ -216,6 +216,9 @@
       console.log('Fetching from cloud:', cloudUrl);
       var url = cloudUrl + '?cmd=getAllColonies';
       
+      // Store current local data in case sync fails
+      var localBackup = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]');
+      
       fetch(url, {mode: 'cors'})
         .then(function(response) { 
           console.log('Response status:', response.status);
@@ -240,14 +243,24 @@
             renderColonies();
             updateStats();
             updateCloudStatus(true);
-            showToast('Synced from cloud! (' + colonies.length + ' entries)');
+            showToast('✅ Synced from cloud! (' + colonies.length + ' entries)');
           } else {
-            showToast('Cloud returned error: ' + (data.error || 'Unknown'));
+            // Restore local data on error
+            colonies = localBackup;
+            saveLocalData();
+            renderColonies();
+            updateStats();
+            showToast('⚠️ Cloud error: ' + (data.error || 'Unknown') + ' - keeping local data');
           }
         })
         .catch(function(err) {
           console.error('Sync error:', err);
-          showToast('Sync failed: ' + err.message);
+          // Restore local data on error
+          colonies = localBackup;
+          saveLocalData();
+          renderColonies();
+          updateStats();
+          showToast('⚠️ Sync failed: ' + err.message + ' - keeping local data');
         });
     }
     
@@ -304,7 +317,14 @@
       }
       
       showToast('🔄 Syncing from cloud...');
+      
+      // Backup local data before sync
+      var localBackup = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]');
+      console.log('Local backup:', localBackup.length, 'entries');
+      
       fetchFromCloud();
+      
+      // If sync fails, local data is already restored inside fetchFromCloud
     }
     
     // Update cloud status display
@@ -455,27 +475,36 @@
         date: new Date().toISOString().split('T')[0]
       };
       
+      // ALWAYS save to local first
       colonies.push(newEntry);
       saveLocalData();
+      console.log('Saved locally. Local entries:', colonies.length);
       
+      // Try to send to cloud (non-blocking)
       if (isCloudConnected) {
         sendToCloud(newEntry).then(function(success) {
           if (success) {
-            showToast('Submitted to cloud!');
+            showToast('✅ Submitted to cloud!');
           } else {
-            showToast('Saved locally (cloud sync failed)');
+            showToast('⚠️ Saved locally (cloud sync failed)');
+            console.log('Cloud upload failed, but local data is safe');
           }
+        }).catch(function(err) {
+          console.error('Cloud upload error:', err);
+          showToast('⚠️ Saved locally (cloud error)');
         });
       } else {
-        showToast('Report saved locally!');
+        showToast('✅ Report saved locally!');
       }
       
+      // Clear form
       document.getElementById('r-name').value = '';
       document.getElementById('r-location').value = '';
       document.getElementById('r-type').value = 'cat';
       document.getElementById('r-status').value = '';
       document.getElementById('r-notes').value = '';
       
+      // Go back to colony list
       showSection('colony');
     });
     
